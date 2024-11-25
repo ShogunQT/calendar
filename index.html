@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Future Calendar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        #calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: auto repeat(6, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            color: white;
+            max-width: 100%;
+            background-size: cover;
+            background-position: center;
+        }
+        .day-header {
+            font-weight: bold;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            color: black;
+            border: 1px solid #ccc;
+        }
+        .day {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            border-radius: 5px;
+            color: black;
+            text-align: center;
+            height: 50px;
+            position: relative;
+        }
+        .day:hover {
+            background-color: rgba(224, 224, 224, 0.8);
+        }
+        .highlighted {
+            background-color: #ff9800;
+            color: white;
+            border: 2px solid #ff5722;
+        }
+        .jump-highlighted {
+            background-color: #4CAF50;
+            color: white;
+            border: 2px solid #388E3C;
+        }
+        .reminder-star {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            color: gold;
+            font-size: 18px;
+        }
+        #reminderModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+        #modalOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        button, select, input {
+            padding: 10px;
+            margin: 5px;
+        }
+        #calendarInfo {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        footer {
+            font-size: 14px;
+            color: #888;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .day:nth-child(7n + 1) {
+            color: red;
+            border: 2px solid red;
+        }
+        .month-arrows {
+            display: inline-flex;
+            justify-content: center;
+            margin: 20px 0;
+            align-items: center;
+        }
+        .arrow {
+            font-size: 20px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        .month-arrows select, .month-arrows button {
+            margin: 0 5px;
+        }
+        .jump-to-date-container {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Future Calendar</h1>
+    
+    <div class="month-arrows">
+        <span class="arrow" onclick="changeMonth(-1)">&#8592;</span>
+        
+        <select id="monthSelect" onchange="updateCalendar()">
+            <option value="0">January</option>
+            <option value="1">February</option>
+            <option value="2">March</option>
+            <option value="3">April</option>
+            <option value="4">May</option>
+            <option value="5">June</option>
+            <option value="6">July</option>
+            <option value="7">August</option>
+            <option value="8">September</option>
+            <option value="9">October</option>
+            <option value="10">November</option>
+            <option value="11">December</option>
+        </select>
+        
+        <select id="yearSelect" onchange="updateCalendar()"></select>
+        
+        <span class="arrow" onclick="changeMonth(1)">&#8594;</span>
+    </div>
+
+    <div class="jump-to-date-container">
+        <input type="date" id="jumpToDate" onchange="jumpToDate()">
+    </div>
+
+    <div id="calendarInfo"></div>
+
+    <div id="calendar"></div>
+
+    <div id="modalOverlay"></div>
+    <div id="reminderModal">
+        <h3>Reminders for <span id="modalDate"></span></h3>
+        <ul id="reminderList"></ul>
+        <input type="text" id="reminderInput" placeholder="Add a reminder">
+        <button onclick="addReminder()">Add Reminder</button>
+        <button onclick="closeModal()">Close</button>
+    </div>
+
+    <footer>
+        &copy; 2024 Bislery Group Pvt. Ltd. All rights reserved.
+    </footer>
+
+    <script>
+        const calendar = document.getElementById('calendar');
+        const yearSelect = document.getElementById('yearSelect');
+        const monthSelect = document.getElementById('monthSelect');
+        const reminderModal = document.getElementById('reminderModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalDate = document.getElementById('modalDate');
+        const reminderList = document.getElementById('reminderList');
+        const reminderInput = document.getElementById('reminderInput');
+        const calendarInfo = document.getElementById('calendarInfo');
+        const jumpToDateInput = document.getElementById('jumpToDate');
+        let reminders = {};
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth();
+        let jumpToDateHighlighted = null;
+
+        const monthBackgrounds = [
+            'url("https://www.w3schools.com/w3images/mountains.jpg")',
+            'url("https://www.w3schools.com/w3images/lights.jpg")',
+            'url("https://www.w3schools.com/w3images/forest.jpg")',
+            'url("https://www.w3schools.com/w3images/fjords.jpg")',
+            'url("https://www.w3schools.com/w3images/ocean.jpg")',
+            'url("https://www.w3schools.com/w3images/bridge.jpg")',
+            'url("https://www.w3schools.com/w3images/snow.jpg")',
+            'url("https://www.w3schools.com/w3images/lights.jpg")',
+            'url("https://www.w3schools.com/w3images/forest.jpg")',
+            'url("https://www.w3schools.com/w3images/mountains.jpg")',
+            'url("https://www.w3schools.com/w3images/ocean.jpg")',
+            'url("https://www.w3schools.com/w3images/bridge.jpg")',
+        ];
+
+        function populateYearDropdown() {
+            for (let year = 2024; year <= 2050; year++) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelect.appendChild(option);
+            }
+            yearSelect.value = currentYear;
+            monthSelect.value = currentMonth;
+        }
+
+        function changeMonth(delta) {
+            let newMonth = currentMonth + delta;
+            if (newMonth < 0) {
+                newMonth = 11;
+                currentYear--;
+            } else if (newMonth > 11) {
+                newMonth = 0;
+                currentYear++;
+            }
+
+            currentMonth = newMonth;
+            monthSelect.value = newMonth;
+            yearSelect.value = currentYear;
+            updateCalendar();
+        }
+
+        function updateCalendar() {
+            createCalendar(yearSelect.value, monthSelect.value);
+            calendarInfo.textContent = `Displaying calendar for ${yearSelect.value} - ${monthSelect.options[monthSelect.selectedIndex].text}`;
+        }
+
+        function createCalendar(year, month) {
+            calendar.innerHTML = '';
+            const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            
+            daysOfWeek.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'day-header';
+                header.textContent = day;
+                calendar.appendChild(header);
+            });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDate = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < firstDay; i++) {
+                const emptyCell = document.createElement('div');
+                calendar.appendChild(emptyCell);
+            }
+
+            for (let date = 1; date <= lastDate; date++) {
+                const cell = document.createElement('div');
+                cell.className = 'day';
+                cell.textContent = date;
+
+                const cellDateKey = `${year}-${month}-${date}`;
+                if (reminders[cellDateKey] && reminders[cellDateKey].length > 0) {
+                    const star = document.createElement('div');
+                    star.className = 'reminder-star';
+                    star.textContent = '★';
+                    cell.appendChild(star);
+                }
+
+                if (jumpToDateHighlighted === cellDateKey) {
+                    cell.classList.add('jump-highlighted');
+                }
+
+                const today = new Date();
+                if (year == today.getFullYear() && month == today.getMonth() && date == today.getDate()) {
+                    cell.classList.add('highlighted');
+                }
+
+                cell.addEventListener('click', () => showReminders(cellDateKey, date));
+                calendar.appendChild(cell);
+            }
+
+            document.body.style.backgroundImage = monthBackgrounds[month];
+        }
+
+        function jumpToDate() {
+            const date = new Date(jumpToDateInput.value);
+            if (isNaN(date.getTime())) return;
+
+            currentYear = date.getFullYear();
+            currentMonth = date.getMonth();
+            jumpToDateHighlighted = `${currentYear}-${currentMonth}-${date.getDate()}`;
+            yearSelect.value = currentYear;
+            monthSelect.value = currentMonth;
+            updateCalendar();
+        }
+
+        function showReminders(dateKey, date) {
+            reminderList.innerHTML = '';
+            modalDate.textContent = `${date} ${monthSelect.options[monthSelect.selectedIndex].text} ${yearSelect.value}`;
+
+            if (reminders[dateKey]) {
+                reminders[dateKey].forEach((reminder, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = reminder;
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Remove';
+                    deleteBtn.style.marginLeft = '10px';
+                    deleteBtn.addEventListener('click', () => removeReminder(dateKey, index));
+                    listItem.appendChild(deleteBtn);
+
+                    reminderList.appendChild(listItem);
+                });
+            }
+
+            reminderModal.style.display = 'block';
+            modalOverlay.style.display = 'block';
+        }
+
+        function closeModal() {
+            reminderModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+        }
+
+        function addReminder() {
+            const reminderText = reminderInput.value.trim();
+            if (reminderText === '') return;
+
+            const dateKey = `${yearSelect.value}-${monthSelect.value}-${modalDate.textContent.split(' ')[0]}`;
+            if (!reminders[dateKey]) reminders[dateKey] = [];
+            reminders[dateKey].push(reminderText);
+            reminderInput.value = '';
+            updateCalendar();
+            showReminders(dateKey, modalDate.textContent.split(' ')[0]);
+        }
+
+        function removeReminder(dateKey, index) {
+            if (!reminders[dateKey]) return;
+
+            reminders[dateKey].splice(index, 1);
+            if (reminders[dateKey].length === 0) {
+                delete reminders[dateKey];
+            }
+
+            updateCalendar();
+            showReminders(dateKey, modalDate.textContent.split(' ')[0]);
+        }
+
+        populateYearDropdown();
+        updateCalendar();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
